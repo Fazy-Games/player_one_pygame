@@ -16,8 +16,9 @@ class Game:
 
         self.last_shot_time = 0
         self.last_spawn_time = 0
-        self.last_sprint_time = 0
-        self.last_gunboost_time = 0
+        self.last_sprint_time = config.PLAYER_INITIAL_SPRINT_COOLDOWN
+        self.last_gunboost_time = config.PLAYER_INITIAL_GUNBOOST_COOLDOWN
+        self.last_bomb_time = config.PLAYER_INITIAL_BOMB_COOLDOWN
         self.sprint_flag = False
         self.gunboost_charges = 0
         self.score = 0
@@ -84,11 +85,14 @@ class Game:
 
             self.handle_enemy_spawn()
 
-            if keys_pressed[pg.K_f]:
+            if keys_pressed[pg.K_x]:
                 self.handle_gunboost()
 
             if keys_pressed[pg.K_LCTRL]:
                 self.handle_shooting()
+
+            if keys_pressed[pg.K_SPACE]:
+                self.handle_bomb()
 
             self.handle_sprint(keys_pressed)
             self.handle_movement(keys_pressed)
@@ -151,17 +155,23 @@ class Game:
             self.player_rect.x += config.PLAYER_SPRINT_VELOCITY if self.sprint_flag else config.PLAYER_VELOCITY
 
     def draw_status(self):
-        sprint_cooldown = config.PLAYER_SPRINT_COOLDOWN - self.current_time - self.last_sprint_time
-        sprint_cooldown_text = self.base_font.render(f'Sprint CD: {sprint_cooldown/1000:.1f}', False, (255, 255, 255))
-        gunboost_cooldown = config.PLAYER_GUNBOOST_COOLDOWN - self.current_time - self.last_sprint_time
-        gunboost_cooldown_text = self.base_font.render(f'Gunboost CD: {gunboost_cooldown/1000:.1f}', False, (255, 255, 255))
+        sprint_cooldown = config.PLAYER_SPRINT_COOLDOWN - (self.current_time - self.last_sprint_time)
+        sprint_cooldown_string = f'{sprint_cooldown/1000:.1f}' if sprint_cooldown > 0 else 'RDY'
+        sprint_cooldown_text = self.base_font.render(f'Sprint CD: {sprint_cooldown_string}', False, (255, 255, 255))
+        gunboost_cooldown = config.PLAYER_GUNBOOST_COOLDOWN - (self.current_time - self.last_gunboost_time)
+        gunboost_cooldown_string = f'{gunboost_cooldown/1000:.1f}' if gunboost_cooldown > 0 else 'RDY'
+        gunboost_cooldown_text = self.base_font.render(f'Gunboost CD: {gunboost_cooldown_string}', False, (255, 255, 255))
         gunboost_charges_text = self.base_font.render(f'Gunboost charges: {self.gunboost_charges}', False, (255, 255, 255))
+        bomb_cooldown = config.PLAYER_BOMB_COOLDOWN - (self.current_time - self.last_bomb_time)
+        bomb_cooldown_string = f'{bomb_cooldown/1000:.1f}' if bomb_cooldown > 0 else 'RDY'
+        bomb_cooldown_text = self.base_font.render(f'Bomb CD: {bomb_cooldown_string}', False, (255, 255, 255))
         health_text = self.base_font.render(f'HEALTH: {self.health}', False, (255, 255, 255))
         score_text = self.base_font.render(f'SCORE: {self.score}', False, (255, 255, 255))
 
-        self.game_window.blit(sprint_cooldown_text, (0, config.WINDOW_HEIGHT - 4*sprint_cooldown_text.get_height()))
-        self.game_window.blit(gunboost_cooldown_text, (0, config.WINDOW_HEIGHT - 3*gunboost_cooldown_text.get_height()))
-        self.game_window.blit(gunboost_charges_text, (0, config.WINDOW_HEIGHT - 2*gunboost_charges_text.get_height()))
+        self.game_window.blit(sprint_cooldown_text, (0, config.WINDOW_HEIGHT - 5*sprint_cooldown_text.get_height()))
+        self.game_window.blit(gunboost_cooldown_text, (0, config.WINDOW_HEIGHT - 4*gunboost_cooldown_text.get_height()))
+        self.game_window.blit(gunboost_charges_text, (0, config.WINDOW_HEIGHT - 3*gunboost_charges_text.get_height()))
+        self.game_window.blit(bomb_cooldown_text, (0, config.WINDOW_HEIGHT - 2*bomb_cooldown_text.get_height()))
         self.game_window.blit(health_text, (0, config.WINDOW_HEIGHT - health_text.get_height()))
         self.game_window.blit(score_text, (config.WINDOW_WIDTH - score_text.get_width(), config.WINDOW_HEIGHT - 24))
 
@@ -216,8 +226,7 @@ class Game:
         if self.sprint_flag and self.current_time - config.PLAYER_SPRINT_DURATION > self.last_sprint_time:
             self.sprint_flag = False
 
-        if keys_pressed[pg.K_LSHIFT] and (
-                self.current_time - self.last_sprint_time > config.PLAYER_SPRINT_COOLDOWN or self.last_sprint_time == 0):
+        if keys_pressed[pg.K_LSHIFT] and self.current_time - self.last_sprint_time > config.PLAYER_SPRINT_COOLDOWN:
             self.sprint_flag = True
             # Add a sound effect possibly
             self.last_sprint_time = self.current_time
@@ -226,3 +235,14 @@ class Game:
         if self.current_time - config.PLAYER_GUNBOOST_COOLDOWN > self.last_gunboost_time:
             self.gunboost_charges = 40
             self.last_gunboost_time = self.current_time
+
+    def handle_bomb(self):
+        if self.current_time - config.PLAYER_BOMB_COOLDOWN > self.last_bomb_time:
+            for n in range(63):
+                bomb_bullet = pg.Rect(n*12, config.WINDOW_HEIGHT - 10, config.PLAYER_BULLET_WIDTH, config.PLAYER_BULLET_HEIGHT)
+                self.bullets.append(bomb_bullet)
+            for n in range(63):
+                bomb_bullet = pg.Rect(n*12, config.WINDOW_HEIGHT - 5, config.PLAYER_BULLET_WIDTH, config.PLAYER_BULLET_HEIGHT)
+                self.bullets.append(bomb_bullet)
+            pg.mixer.Sound.play(self.laser_sound_boosted)
+            self.last_bomb_time = self.current_time
