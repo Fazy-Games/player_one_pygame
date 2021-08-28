@@ -4,6 +4,9 @@ import pygame as pg
 import config
 import srt
 
+def clamp_integer(value, lower_bound, upper_bound):
+    return lower_bound if value < lower_bound else upper_bound if value > upper_bound else value
+
 
 class Game:
     def __init__(self):
@@ -26,6 +29,8 @@ class Game:
         self.health = config.PLAYER_STARTING_HEALTH
         self.background_shift_y = config.WINDOW_HEIGHT
         self.current_time = 0
+
+        self.music_volume = 0.25
 
         self.game_window = pg.display.set_mode((config.WINDOW_WIDTH, config.WINDOW_HEIGHT))
         pg.display.set_caption(config.CAPTION_STRING)
@@ -92,19 +97,20 @@ class Game:
 
             self.handle_enemy_spawn()
 
-            if keys_pressed[pg.K_x]:
+            if keys_pressed[pg.K_f]:
                 self.handle_gunboost()
 
-            if keys_pressed[pg.K_LCTRL]:
+            if keys_pressed[pg.K_SPACE]:
                 self.handle_shooting()
 
-            if keys_pressed[pg.K_SPACE]:
+            if keys_pressed[pg.K_LCTRL]:
                 self.handle_bomb()
 
             self.handle_sprint(keys_pressed)
             self.handle_movement(keys_pressed)
             self.handle_bullets()
             self.handle_enemies()
+            self.handle_volume(keys_pressed)
             self.draw_window()
 
     def handle_enemies(self):
@@ -112,12 +118,12 @@ class Game:
             enemy.y += config.GREEN_ENEMY_VELOCITY
             if enemy.y > config.WINDOW_HEIGHT:
                 self.enemies.remove(enemy)
-                self.score -= 250
+                self.score -= 500
             if enemy.colliderect(self.player_rect):
                 pg.mixer.Sound.play(self.enemy_hit_sound)
                 # Add better sound
                 self.enemies.remove(enemy)
-                self.health -= 10
+                self.health -= 20
 
     def handle_bullets(self):
         for bullet in self.bullets:
@@ -127,7 +133,7 @@ class Game:
                     if enemy.colliderect(bullet):
                         pg.mixer.Sound.play(self.enemy_hit_sound)
                         self.score += 1000
-                        if random.randint(1, 100) > 90:
+                        if random.randint(1, 100) > 80:
                             self.health += 5
                         self.enemies.remove(enemy)
                         self.bullets.remove(bullet)
@@ -164,14 +170,14 @@ class Game:
     def draw_status(self):
         sprint_cooldown = config.PLAYER_SPRINT_COOLDOWN - (self.current_time - self.last_sprint_time)
         sprint_cooldown_string = f'{sprint_cooldown/1000:.1f}' if sprint_cooldown > 0 else 'RDY'
-        sprint_cooldown_text = self.base_font.render(f'Sprint CD: {sprint_cooldown_string}', False, (255, 255, 255))
+        sprint_cooldown_text = self.base_font.render(f'Sprint [S] CD: {sprint_cooldown_string}', False, (255, 255, 255))
         gunboost_cooldown = config.PLAYER_GUNBOOST_COOLDOWN - (self.current_time - self.last_gunboost_time)
         gunboost_cooldown_string = f'{gunboost_cooldown/1000:.1f}' if gunboost_cooldown > 0 else 'RDY'
-        gunboost_cooldown_text = self.base_font.render(f'Gunboost CD: {gunboost_cooldown_string}', False, (255, 255, 255))
+        gunboost_cooldown_text = self.base_font.render(f'Gunboost [F] CD: {gunboost_cooldown_string}', False, (255, 255, 255))
         gunboost_charges_text = self.base_font.render(f'Gunboost charges: {self.gunboost_charges}', False, (255, 255, 255))
         bomb_cooldown = config.PLAYER_BOMB_COOLDOWN - (self.current_time - self.last_bomb_time)
         bomb_cooldown_string = f'{bomb_cooldown/1000:.1f}' if bomb_cooldown > 0 else 'RDY'
-        bomb_cooldown_text = self.base_font.render(f'Bomb CD: {bomb_cooldown_string}', False, (255, 255, 255))
+        bomb_cooldown_text = self.base_font.render(f'Bomb [Ctrl] CD: {bomb_cooldown_string}', False, (255, 255, 255))
         health_text = self.base_font.render(f'HEALTH: {self.health}', False, (255, 255, 255))
         score_text = self.base_font.render(f'SCORE: {self.score}', False, (255, 255, 255))
         for surface in (sprint_cooldown_text, gunboost_cooldown_text, gunboost_charges_text,
@@ -213,10 +219,11 @@ class Game:
         pg.display.update()
 
     def handle_enemy_spawn(self):
-        if self.current_time > self.last_spawn_time + config.GREEN_ENEMY_SPAWN_PERIOD:
+        reduced_spawn_period = config.GREEN_ENEMY_SPAWN_PERIOD - (self.current_time / 1000)
+        if self.current_time > self.last_spawn_time + reduced_spawn_period:
             enemy_x_position = random.randint(config.BORDER_SPACE,
                                               config.WINDOW_WIDTH - config.BORDER_SPACE - config.GREEN_ENEMY_WIDTH)
-            enemy_y_position = random.randint(config.BORDER_SPACE, config.WINDOW_HEIGHT / 4)
+            enemy_y_position = random.randint(config.BORDER_SPACE, int(config.WINDOW_HEIGHT / 5))
 
             enemy = pg.Rect(enemy_x_position, enemy_y_position, config.GREEN_ENEMY_WIDTH, config.GREEN_ENEMY_HEIGHT)
 
@@ -246,7 +253,7 @@ class Game:
         if self.sprint_flag and self.current_time - config.PLAYER_SPRINT_DURATION > self.last_sprint_time:
             self.sprint_flag = False
 
-        if keys_pressed[pg.K_LSHIFT] and self.current_time - self.last_sprint_time > config.PLAYER_SPRINT_COOLDOWN:
+        if keys_pressed[pg.K_s] and self.current_time - self.last_sprint_time > config.PLAYER_SPRINT_COOLDOWN:
             self.sprint_flag = True
             # Add a sound effect possibly
             self.last_sprint_time = self.current_time
@@ -266,3 +273,17 @@ class Game:
                 self.bullets.append(bomb_bullet)
             pg.mixer.Sound.play(self.laser_sound_boosted)
             self.last_bomb_time = self.current_time
+
+    def handle_volume(self, keys_pressed):
+        if keys_pressed[pg.K_o]:
+            self.music_volume += 0.01
+            if self.music_volume > 1.00:
+                self.music_volume = 1.00
+            pg.mixer.music.set_volume(self.music_volume)
+            return
+        if keys_pressed[pg.K_l]:
+            self.music_volume -= 0.01
+            if self.music_volume < 0.01:
+                self.music_volume = 0.01
+            pg.mixer.music.set_volume(self.music_volume)
+            return
