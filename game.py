@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 import pygame as pg
 import config
+import srt
 
 
 class Game:
@@ -22,7 +23,7 @@ class Game:
         self.sprint_flag = False
         self.gunboost_charges = 0
         self.score = 0
-        self.health = 100
+        self.health = config.PLAYER_STARTING_HEALTH
         self.background_shift_y = config.WINDOW_HEIGHT
         self.current_time = 0
 
@@ -62,7 +63,13 @@ class Game:
         self.laser_sound_boosted.set_volume(0.05)
 
         pg.font.init()
-        self.base_font = pg.font.SysFont('Consolas', 20)
+        self.base_font = pg.font.SysFont('Consolas', 16)
+        self.subtitles_font = pg.font.SysFont('Consolas', 30)
+        subtitles_file_path = assets_dir_path / 'player_one.srt'
+        self.song_subtitles = None
+        with open(subtitles_file_path, 'r', encoding='utf8') as srt_file:
+            subtitle_generator = srt.parse(srt_file)
+            self.song_subtitles = list(subtitle_generator)
 
     def game_loop(self):
         while self.is_running:
@@ -120,7 +127,7 @@ class Game:
                     if enemy.colliderect(bullet):
                         pg.mixer.Sound.play(self.enemy_hit_sound)
                         self.score += 1000
-                        if random.randint(1,100) > 90:
+                        if random.randint(1, 100) > 90:
                             self.health += 5
                         self.enemies.remove(enemy)
                         self.bullets.remove(bullet)
@@ -167,13 +174,25 @@ class Game:
         bomb_cooldown_text = self.base_font.render(f'Bomb CD: {bomb_cooldown_string}', False, (255, 255, 255))
         health_text = self.base_font.render(f'HEALTH: {self.health}', False, (255, 255, 255))
         score_text = self.base_font.render(f'SCORE: {self.score}', False, (255, 255, 255))
+        for surface in (sprint_cooldown_text, gunboost_cooldown_text, gunboost_charges_text,
+                        bomb_cooldown_text, health_text, score_text):
+            surface.set_alpha(150)
 
         self.game_window.blit(sprint_cooldown_text, (0, config.WINDOW_HEIGHT - 5*sprint_cooldown_text.get_height()))
         self.game_window.blit(gunboost_cooldown_text, (0, config.WINDOW_HEIGHT - 4*gunboost_cooldown_text.get_height()))
         self.game_window.blit(gunboost_charges_text, (0, config.WINDOW_HEIGHT - 3*gunboost_charges_text.get_height()))
         self.game_window.blit(bomb_cooldown_text, (0, config.WINDOW_HEIGHT - 2*bomb_cooldown_text.get_height()))
         self.game_window.blit(health_text, (0, config.WINDOW_HEIGHT - health_text.get_height()))
-        self.game_window.blit(score_text, (config.WINDOW_WIDTH - score_text.get_width(), config.WINDOW_HEIGHT - 24))
+        self.game_window.blit(score_text, (config.WINDOW_WIDTH - score_text.get_width(), config.WINDOW_HEIGHT - health_text.get_height()))
+
+    def draw_lyrics(self):
+        for subtitle in self.song_subtitles:
+            subtitle_start_ms = subtitle.start.seconds * 1000 + subtitle.start.microseconds / 1000
+            subtitle_end_ms = subtitle.end.seconds * 1000 + subtitle.end.microseconds / 1000
+            if (self.current_time >= subtitle_start_ms) and (self.current_time < subtitle_end_ms):
+                lyrics_text = self.subtitles_font.render(subtitle.content, False, (255, 255, 255))
+                lyrics_text.set_alpha(200)
+                self.game_window.blit(lyrics_text, (config.WINDOW_WIDTH/2 - lyrics_text.get_width()/2, 24))
 
     def draw_window(self):
         self.background_shift_y += 1
@@ -190,6 +209,7 @@ class Game:
         for enemy in self.enemies:
             self.game_window.blit(self.green_enemy_img, (enemy.x, enemy.y))
         self.draw_status()
+        self.draw_lyrics()
         pg.display.update()
 
     def handle_enemy_spawn(self):
